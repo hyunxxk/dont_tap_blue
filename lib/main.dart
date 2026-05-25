@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -41,7 +40,8 @@ class GamePage extends StatefulWidget {
   State<GamePage> createState() => _GamePageState();
 }
 
-class _GamePageState extends State<GamePage> {
+class _GamePageState extends State<GamePage>
+    with SingleTickerProviderStateMixin {
   static const int _boardSize = 4;
   static const int _tileCount = _boardSize * _boardSize;
   static const String _bestScoreKey = 'best_score';
@@ -49,8 +49,7 @@ class _GamePageState extends State<GamePage> {
   final Random _random = Random();
 
   GamePhase _phase = GamePhase.ready;
-  Timer? _tickTimer;
-  DateTime? _roundStartedAt;
+  late final AnimationController _roundTimer;
   Duration _activeRoundDuration = const Duration(milliseconds: 1500);
 
   int _score = 0;
@@ -58,7 +57,6 @@ class _GamePageState extends State<GamePage> {
   int _streak = 0;
   int _maxStreak = 0;
   int _safeIndex = 0;
-  double _timeLeft = 1;
   String _gameOverTitle = 'Blue got you';
   String _lastResult = 'Hit start. Tap orange. Never tap blue.';
   int _shakeTick = 0;
@@ -83,24 +81,34 @@ class _GamePageState extends State<GamePage> {
   @override
   void initState() {
     super.initState();
+    _roundTimer =
+        AnimationController(
+          vsync: this,
+          value: 1,
+          duration: _activeRoundDuration,
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.dismissed &&
+              _phase == GamePhase.playing) {
+            _endGame('Too slow');
+          }
+        });
     _rollBoard();
     _loadBestScore();
   }
 
   @override
   void dispose() {
-    _tickTimer?.cancel();
+    _roundTimer.dispose();
     super.dispose();
   }
 
   void _startGame() {
-    _tickTimer?.cancel();
+    _roundTimer.stop();
     setState(() {
       _phase = GamePhase.playing;
       _score = 0;
       _streak = 0;
       _maxStreak = 0;
-      _timeLeft = 1;
       _gameOverTitle = 'Blue got you';
       _lastResult = 'Stay warm. Dodge blue.';
       _rollBoard();
@@ -129,11 +137,13 @@ class _GamePageState extends State<GamePage> {
 
   void _scoreHit() {
     HapticFeedback.selectionClick();
-    _triggerSuccessFeedback();
     setState(() {
       final int nextStreak = _streak + 1;
       final int bonus = nextStreak % 5 == 0 ? max(1, nextStreak ~/ 5) : 0;
 
+      _safePulseTick += 1;
+      _flashTick += 1;
+      _flashColor = const Color(0xFFFFB35C);
       _streak = nextStreak;
       _maxStreak = max(_maxStreak, _streak);
       _score += 1 + bonus;
@@ -146,8 +156,10 @@ class _GamePageState extends State<GamePage> {
 
   void _miss(int index) {
     HapticFeedback.lightImpact();
-    _triggerMistakeFeedback();
     setState(() {
+      _shakeTick += 1;
+      _flashTick += 1;
+      _flashColor = const Color(0xFFFF3158);
       _score = max(0, _score - 1);
       _streak = 0;
       _lastResult = _decoyIndexes.contains(index)
@@ -159,14 +171,18 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _endGame(String title) {
-    _tickTimer?.cancel();
+    if (_phase == GamePhase.gameOver) {
+      return;
+    }
+    _roundTimer.stop();
     HapticFeedback.heavyImpact();
-    _triggerMistakeFeedback();
     setState(() {
+      _shakeTick += 1;
+      _flashTick += 1;
+      _flashColor = const Color(0xFFFF3158);
       _phase = GamePhase.gameOver;
       _gameOverTitle = title;
       _setBestScore(max(_bestScore, _score));
-      _timeLeft = 0;
     });
   }
 
@@ -190,47 +206,17 @@ class _GamePageState extends State<GamePage> {
     });
   }
 
-  void _triggerSuccessFeedback() {
-    setState(() {
-      _safePulseTick += 1;
-      _flashTick += 1;
-      _flashColor = const Color(0xFFFFB35C);
-    });
-  }
-
-  void _triggerMistakeFeedback() {
-    setState(() {
-      _shakeTick += 1;
-      _flashTick += 1;
-      _flashColor = const Color(0xFFFF3158);
-    });
-  }
-
   void _startRoundClock() {
-    _tickTimer?.cancel();
-    _activeRoundDuration = _roundDuration;
-    _roundStartedAt = DateTime.now();
-    _timeLeft = 1;
-    _tickTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted || _phase != GamePhase.playing || _roundStartedAt == null) {
-        return;
-      }
-
-      final int elapsed = DateTime.now()
-          .difference(_roundStartedAt!)
-          .inMilliseconds;
-      final double remaining =
-          1 - (elapsed / _activeRoundDuration.inMilliseconds);
-
-      if (remaining <= 0) {
-        _endGame('Too slow');
-        return;
-      }
-
+    final Duration nextDuration = _roundDuration;
+    if (_activeRoundDuration != nextDuration) {
       setState(() {
-        _timeLeft = remaining.clamp(0, 1);
+        _activeRoundDuration = nextDuration;
       });
-    });
+    }
+    _roundTimer
+      ..stop()
+      ..duration = nextDuration
+      ..reverse(from: 1);
   }
 
   Duration get _roundDuration {
@@ -314,7 +300,7 @@ class _GamePageState extends State<GamePage> {
                     SizedBox(height: sectionGap),
                     _PressureBar(
                       phase: _phase,
-                      value: _timeLeft,
+                      progress: _roundTimer,
                       duration: _activeRoundDuration,
                       isCompact: isCompact,
                     ),
@@ -478,13 +464,15 @@ class _GameStage extends StatelessWidget {
                 ],
                 SizedBox.square(
                   dimension: boardExtent,
-                  child: _TargetGrid(
-                    boardSize: boardSize,
-                    phase: phase,
-                    safePulseTick: safePulseTick,
-                    tileKindFor: tileKindFor,
-                    onTileTap: onTileTap,
-                    isCompact: isCompact,
+                  child: RepaintBoundary(
+                    child: _TargetGrid(
+                      boardSize: boardSize,
+                      phase: phase,
+                      safePulseTick: safePulseTick,
+                      tileKindFor: tileKindFor,
+                      onTileTap: onTileTap,
+                      isCompact: isCompact,
+                    ),
                   ),
                 ),
               ],
@@ -625,59 +613,67 @@ class _ScorePill extends StatelessWidget {
 class _PressureBar extends StatelessWidget {
   const _PressureBar({
     required this.phase,
-    required this.value,
+    required this.progress,
     required this.duration,
     required this.isCompact,
   });
 
   final GamePhase phase;
-  final double value;
+  final Animation<double> progress;
   final Duration duration;
   final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
-    final bool isPlaying = phase == GamePhase.playing;
-    final Color barColor = value < 0.28
-        ? const Color(0xFFFF4D6D)
-        : const Color(0xFFFFB35C);
+    return AnimatedBuilder(
+      animation: progress,
+      builder: (context, _) {
+        final bool isPlaying = phase == GamePhase.playing;
+        final double value = isPlaying ? progress.value : 1;
+        final Color barColor = value < 0.28
+            ? const Color(0xFFFF4D6D)
+            : const Color(0xFFFFB35C);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.timer_rounded, color: barColor, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                isPlaying
-                    ? '${(duration.inMilliseconds / 1000).toStringAsFixed(2)}s window'
-                    : 'Reaction window',
-                style:
-                    (isCompact
-                            ? Theme.of(context).textTheme.labelMedium
-                            : Theme.of(context).textTheme.labelLarge)
-                        ?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.72),
-                          fontWeight: FontWeight.w800,
-                        ),
+            Row(
+              children: [
+                Icon(Icons.timer_rounded, color: barColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isPlaying
+                        ? '${(duration.inMilliseconds / 1000).toStringAsFixed(2)}s window'
+                        : 'Reaction window',
+                    style:
+                        (isCompact
+                                ? Theme.of(context).textTheme.labelMedium
+                                : Theme.of(context).textTheme.labelLarge)
+                            ?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.72),
+                              fontWeight: FontWeight.w800,
+                            ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: isCompact ? 6 : 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                key: const ValueKey('pressure-bar'),
+                value: value,
+                minHeight: isCompact ? 8 : 10,
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                color: isPlaying
+                    ? barColor
+                    : Colors.white.withValues(alpha: 0.28),
               ),
             ),
           ],
-        ),
-        SizedBox(height: isCompact ? 6 : 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            key: const ValueKey('pressure-bar'),
-            value: isPlaying ? value : 1,
-            minHeight: isCompact ? 8 : 10,
-            backgroundColor: Colors.white.withValues(alpha: 0.08),
-            color: isPlaying ? barColor : Colors.white.withValues(alpha: 0.28),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
