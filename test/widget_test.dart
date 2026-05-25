@@ -1,30 +1,69 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dont_tap_blue/main.dart';
 
+Finder _tileWithKind(String kind) {
+  return find.byWidgetPredicate((Widget widget) {
+    final Key? key = widget.key;
+    return key is ValueKey<String> && key.value.endsWith('-$kind');
+  }, skipOffstage: false);
+}
+
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('player can start and score on a safe tile', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpWidget(const DontTapBlueApp());
+
+    expect(find.text("Don't Tap Blue"), findsOneWidget);
+    expect(find.text('Start Run'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('primary-action')));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Find the warm tile'), findsOneWidget);
+    expect(_tileWithKind('safe'), findsOneWidget);
+    expect(_tileWithKind('trap'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pressure-bar')), findsOneWidget);
+
+    await tester.tap(_tileWithKind('safe'));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('score-pill-Score')), findsOneWidget);
+    expect(find.text('1'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('tapping blue ends the run and keeps best score visible', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const DontTapBlueApp());
+
+    await tester.tap(find.byKey(const ValueKey('primary-action')));
+    await tester.pump();
+
+    await tester.tap(_tileWithKind('trap'));
+    await tester.pump();
+
+    expect(
+      find.textContaining(RegExp('Blue got you|Too slow')),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.text('Play Again'), findsOneWidget);
+    expect(find.byKey(const ValueKey('score-pill-Best')), findsOneWidget);
+    expect(find.byKey(const ValueKey('result-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('result-rank')), findsOneWidget);
+    expect(find.byKey(const ValueKey('result-cause')), findsOneWidget);
   });
 }

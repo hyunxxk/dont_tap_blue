@@ -26,3 +26,17 @@ flutter run
 ```sh
 flutter test
 ```
+
+## External Test Build
+
+The Flutter Web build is deployed with GitHub Pages:
+
+```text
+https://hyunxxk.github.io/dont_tap_blue/
+```
+
+Manual web build:
+
+```sh
+flutter build web --release --base-href /dont_tap_blue/
+```
