@@ -281,75 +281,74 @@ class _GamePageState extends State<GamePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121318),
-      body: _FeedbackFrame(
-        shakeTick: _shakeTick,
-        flashTick: _flashTick,
-        flashColor: _flashColor,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-            child: Column(
-              children: [
-                _ScoreHeader(
-                  score: _score,
-                  bestScore: _bestScore,
-                  streak: _streak,
-                  level: _level,
-                ),
-                const SizedBox(height: 14),
-                _PressureBar(
-                  phase: _phase,
-                  value: _timeLeft,
-                  duration: _activeRoundDuration,
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 460),
-                      child: Column(
-                        children: [
-                          _PromptPanel(
-                            phase: _phase,
-                            score: _score,
-                            streak: _streak,
-                            gameOverTitle: _gameOverTitle,
-                            lastResult: _lastResult,
-                          ),
-                          const SizedBox(height: 16),
-                          if (_phase == GamePhase.gameOver) ...[
-                            _ResultCard(
-                              score: _score,
-                              bestScore: _bestScore,
-                              maxCombo: _maxStreak,
-                              level: _level,
-                              cause: _gameOverTitle,
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          Expanded(
-                            child: _TargetGrid(
-                              boardSize: _boardSize,
-                              phase: _phase,
-                              safePulseTick: _safePulseTick,
-                              tileKindFor: _tileKindFor,
-                              onTileTap: _handleTileTap,
-                            ),
-                          ),
-                        ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isCompact =
+            constraints.maxHeight < 760 || constraints.maxWidth < 430;
+        final EdgeInsets pagePadding = EdgeInsets.fromLTRB(
+          isCompact ? 12 : 16,
+          isCompact ? 10 : 16,
+          isCompact ? 12 : 16,
+          isCompact ? 12 : 20,
+        );
+        final double sectionGap = isCompact ? 8 : 14;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF121318),
+          body: _FeedbackFrame(
+            shakeTick: _shakeTick,
+            flashTick: _flashTick,
+            flashColor: _flashColor,
+            child: SafeArea(
+              child: Padding(
+                padding: pagePadding,
+                child: Column(
+                  children: [
+                    _ScoreHeader(
+                      score: _score,
+                      bestScore: _bestScore,
+                      streak: _streak,
+                      level: _level,
+                      isCompact: isCompact,
+                    ),
+                    SizedBox(height: sectionGap),
+                    _PressureBar(
+                      phase: _phase,
+                      value: _timeLeft,
+                      duration: _activeRoundDuration,
+                      isCompact: isCompact,
+                    ),
+                    SizedBox(height: isCompact ? 10 : 16),
+                    Expanded(
+                      child: _GameStage(
+                        boardSize: _boardSize,
+                        phase: _phase,
+                        score: _score,
+                        bestScore: _bestScore,
+                        streak: _streak,
+                        maxStreak: _maxStreak,
+                        level: _level,
+                        gameOverTitle: _gameOverTitle,
+                        lastResult: _lastResult,
+                        safePulseTick: _safePulseTick,
+                        tileKindFor: _tileKindFor,
+                        onTileTap: _handleTileTap,
+                        isCompact: isCompact,
                       ),
                     ),
-                  ),
+                    SizedBox(height: sectionGap),
+                    _PrimaryAction(
+                      phase: _phase,
+                      onPressed: _startGame,
+                      isCompact: isCompact,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                _PrimaryAction(phase: _phase, onPressed: _startGame),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -400,18 +399,117 @@ class _FeedbackFrame extends StatelessWidget {
   }
 }
 
+class _GameStage extends StatelessWidget {
+  const _GameStage({
+    required this.boardSize,
+    required this.phase,
+    required this.score,
+    required this.bestScore,
+    required this.streak,
+    required this.maxStreak,
+    required this.level,
+    required this.gameOverTitle,
+    required this.lastResult,
+    required this.safePulseTick,
+    required this.tileKindFor,
+    required this.onTileTap,
+    required this.isCompact,
+  });
+
+  final int boardSize;
+  final GamePhase phase;
+  final int score;
+  final int bestScore;
+  final int streak;
+  final int maxStreak;
+  final int level;
+  final String gameOverTitle;
+  final String lastResult;
+  final int safePulseTick;
+  final TileKind Function(int index) tileKindFor;
+  final ValueChanged<int> onTileTap;
+  final bool isCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool hasResult = phase == GamePhase.gameOver;
+        final double promptEstimate = isCompact ? 78 : 112;
+        final double resultEstimate = hasResult ? (isCompact ? 128 : 176) : 0;
+        final double verticalGaps = hasResult
+            ? (isCompact ? 16 : 32)
+            : (isCompact ? 8 : 16);
+        final double availableBoardHeight =
+            constraints.maxHeight -
+            promptEstimate -
+            resultEstimate -
+            verticalGaps;
+        final double boardExtent = min(
+          min(constraints.maxWidth, 460),
+          max(220, availableBoardHeight),
+        );
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _PromptPanel(
+                  phase: phase,
+                  score: score,
+                  streak: streak,
+                  gameOverTitle: gameOverTitle,
+                  lastResult: lastResult,
+                  isCompact: isCompact,
+                ),
+                SizedBox(height: isCompact ? 8 : 16),
+                if (hasResult) ...[
+                  _ResultCard(
+                    score: score,
+                    bestScore: bestScore,
+                    maxCombo: maxStreak,
+                    level: level,
+                    cause: gameOverTitle,
+                    isCompact: isCompact,
+                  ),
+                  SizedBox(height: isCompact ? 8 : 16),
+                ],
+                SizedBox.square(
+                  dimension: boardExtent,
+                  child: _TargetGrid(
+                    boardSize: boardSize,
+                    phase: phase,
+                    safePulseTick: safePulseTick,
+                    tileKindFor: tileKindFor,
+                    onTileTap: onTileTap,
+                    isCompact: isCompact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ScoreHeader extends StatelessWidget {
   const _ScoreHeader({
     required this.score,
     required this.bestScore,
     required this.streak,
     required this.level,
+    required this.isCompact,
   });
 
   final int score;
   final int bestScore;
   final int streak;
   final int level;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -423,6 +521,7 @@ class _ScoreHeader extends StatelessWidget {
             value: score,
             icon: Icons.bolt_rounded,
             color: const Color(0xFFFFD166),
+            isCompact: isCompact,
           ),
         ),
         const SizedBox(width: 8),
@@ -432,6 +531,7 @@ class _ScoreHeader extends StatelessWidget {
             value: bestScore,
             icon: Icons.workspace_premium_rounded,
             color: const Color(0xFF7BD389),
+            isCompact: isCompact,
           ),
         ),
         const SizedBox(width: 8),
@@ -441,6 +541,7 @@ class _ScoreHeader extends StatelessWidget {
             value: streak,
             icon: Icons.local_fire_department_rounded,
             color: const Color(0xFFFF8A5B),
+            isCompact: isCompact,
           ),
         ),
         const SizedBox(width: 8),
@@ -450,6 +551,7 @@ class _ScoreHeader extends StatelessWidget {
             value: level,
             icon: Icons.speed_rounded,
             color: const Color(0xFF65D6CE),
+            isCompact: isCompact,
           ),
         ),
       ],
@@ -463,12 +565,14 @@ class _ScorePill extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    required this.isCompact,
   });
 
   final String label;
   final int value;
   final IconData icon;
   final Color color;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -479,12 +583,15 @@ class _ScorePill extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 8 : 10,
+          vertical: isCompact ? 8 : 10,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 8),
+            Icon(icon, color: color, size: isCompact ? 18 : 20),
+            SizedBox(height: isCompact ? 6 : 8),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -499,10 +606,14 @@ class _ScorePill extends StatelessWidget {
             Text(
               '$value',
               key: ValueKey('score-pill-$label'),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
+              style:
+                  (isCompact
+                          ? Theme.of(context).textTheme.titleLarge
+                          : Theme.of(context).textTheme.headlineSmall)
+                      ?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
             ),
           ],
         ),
@@ -516,11 +627,13 @@ class _PressureBar extends StatelessWidget {
     required this.phase,
     required this.value,
     required this.duration,
+    required this.isCompact,
   });
 
   final GamePhase phase;
   final double value;
   final Duration duration;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -541,21 +654,25 @@ class _PressureBar extends StatelessWidget {
                 isPlaying
                     ? '${(duration.inMilliseconds / 1000).toStringAsFixed(2)}s window'
                     : 'Reaction window',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontWeight: FontWeight.w800,
-                ),
+                style:
+                    (isCompact
+                            ? Theme.of(context).textTheme.labelMedium
+                            : Theme.of(context).textTheme.labelLarge)
+                        ?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontWeight: FontWeight.w800,
+                        ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: isCompact ? 6 : 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: LinearProgressIndicator(
             key: const ValueKey('pressure-bar'),
             value: isPlaying ? value : 1,
-            minHeight: 10,
+            minHeight: isCompact ? 8 : 10,
             backgroundColor: Colors.white.withValues(alpha: 0.08),
             color: isPlaying ? barColor : Colors.white.withValues(alpha: 0.28),
           ),
@@ -572,6 +689,7 @@ class _PromptPanel extends StatelessWidget {
     required this.streak,
     required this.gameOverTitle,
     required this.lastResult,
+    required this.isCompact,
   });
 
   final GamePhase phase;
@@ -579,6 +697,7 @@ class _PromptPanel extends StatelessWidget {
   final int streak;
   final String gameOverTitle;
   final String lastResult;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -604,19 +723,27 @@ class _PromptPanel extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+            style:
+                (isCompact
+                        ? Theme.of(context).textTheme.headlineMedium
+                        : Theme.of(context).textTheme.headlineLarge)
+                    ?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isCompact ? 4 : 8),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontWeight: FontWeight.w600,
-            ),
+            style:
+                (isCompact
+                        ? Theme.of(context).textTheme.bodyMedium
+                        : Theme.of(context).textTheme.bodyLarge)
+                    ?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                    ),
           ),
         ],
       ),
@@ -631,6 +758,7 @@ class _ResultCard extends StatelessWidget {
     required this.maxCombo,
     required this.level,
     required this.cause,
+    required this.isCompact,
   });
 
   final int score;
@@ -638,6 +766,7 @@ class _ResultCard extends StatelessWidget {
   final int maxCombo;
   final int level;
   final String cause;
+  final bool isCompact;
 
   String get _rank {
     if (score >= 80) {
@@ -714,7 +843,7 @@ class _ResultCard extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(isCompact ? 10 : 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -733,11 +862,14 @@ class _ResultCard extends StatelessWidget {
                     child: Text(
                       _rank,
                       key: const ValueKey('result-rank'),
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: _rankColor,
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style:
+                          (isCompact
+                                  ? Theme.of(context).textTheme.titleLarge
+                                  : Theme.of(context).textTheme.headlineMedium)
+                              ?.copyWith(
+                                color: _rankColor,
+                                fontWeight: FontWeight.w900,
+                              ),
                     ),
                   ),
                 ),
@@ -748,11 +880,14 @@ class _ResultCard extends StatelessWidget {
                     children: [
                       Text(
                         _nextGoal,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
+                        style:
+                            (isCompact
+                                    ? Theme.of(context).textTheme.bodyMedium
+                                    : Theme.of(context).textTheme.titleMedium)
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -768,23 +903,39 @@ class _ResultCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: isCompact ? 10 : 14),
             Row(
               children: [
                 Expanded(
-                  child: _ResultMetric(label: 'Score', value: '$score'),
+                  child: _ResultMetric(
+                    label: 'Score',
+                    value: '$score',
+                    isCompact: isCompact,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _ResultMetric(label: 'Best', value: '$bestScore'),
+                  child: _ResultMetric(
+                    label: 'Best',
+                    value: '$bestScore',
+                    isCompact: isCompact,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _ResultMetric(label: 'Max Combo', value: '$maxCombo'),
+                  child: _ResultMetric(
+                    label: 'Max Combo',
+                    value: '$maxCombo',
+                    isCompact: isCompact,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _ResultMetric(label: 'Level', value: '$level'),
+                  child: _ResultMetric(
+                    label: 'Level',
+                    value: '$level',
+                    isCompact: isCompact,
+                  ),
                 ),
               ],
             ),
@@ -796,10 +947,15 @@ class _ResultCard extends StatelessWidget {
 }
 
 class _ResultMetric extends StatelessWidget {
-  const _ResultMetric({required this.label, required this.value});
+  const _ResultMetric({
+    required this.label,
+    required this.value,
+    required this.isCompact,
+  });
 
   final String label;
   final String value;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -809,7 +965,10 @@ class _ResultMetric extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 6 : 8,
+          vertical: isCompact ? 7 : 9,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -827,10 +986,14 @@ class _ResultMetric extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
+              style:
+                  (isCompact
+                          ? Theme.of(context).textTheme.titleMedium
+                          : Theme.of(context).textTheme.titleLarge)
+                      ?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
             ),
           ],
         ),
@@ -846,6 +1009,7 @@ class _TargetGrid extends StatelessWidget {
     required this.safePulseTick,
     required this.tileKindFor,
     required this.onTileTap,
+    required this.isCompact,
   });
 
   final int boardSize;
@@ -853,6 +1017,7 @@ class _TargetGrid extends StatelessWidget {
   final int safePulseTick;
   final TileKind Function(int index) tileKindFor;
   final ValueChanged<int> onTileTap;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -860,8 +1025,8 @@ class _TargetGrid extends StatelessWidget {
       padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: boardSize,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
+      mainAxisSpacing: isCompact ? 7 : 10,
+      crossAxisSpacing: isCompact ? 7 : 10,
       children: List<Widget>.generate(boardSize * boardSize, (index) {
         final TileKind kind = tileKindFor(index);
         return _TargetTile(
@@ -1012,10 +1177,15 @@ class _TileStyle {
 }
 
 class _PrimaryAction extends StatelessWidget {
-  const _PrimaryAction({required this.phase, required this.onPressed});
+  const _PrimaryAction({
+    required this.phase,
+    required this.onPressed,
+    required this.isCompact,
+  });
 
   final GamePhase phase;
   final VoidCallback onPressed;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,7 +1197,7 @@ class _PrimaryAction extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: isCompact ? 50 : 56,
       child: FilledButton.icon(
         key: const ValueKey('primary-action'),
         onPressed: onPressed,
