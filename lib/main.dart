@@ -50,7 +50,7 @@ class _GamePageState extends State<GamePage>
 
   GamePhase _phase = GamePhase.ready;
   late final AnimationController _roundTimer;
-  Duration _activeRoundDuration = const Duration(milliseconds: 1500);
+  Duration _activeRoundDuration = const Duration(milliseconds: 2100);
 
   int _score = 0;
   int _bestScore = 0;
@@ -69,13 +69,13 @@ class _GamePageState extends State<GamePage>
 
   int get _level => 1 + (_score ~/ 6);
 
-  int get _trapCount => (1 + (_score ~/ 8)).clamp(1, 3);
+  int get _trapCount => (1 + (_score ~/ 12)).clamp(1, 3);
 
   int get _decoyCount {
-    if (_score < 4) {
+    if (_score < 7) {
       return 0;
     }
-    return (1 + ((_score - 4) ~/ 8)).clamp(1, 3);
+    return (1 + ((_score - 7) ~/ 10)).clamp(1, 3);
   }
 
   @override
@@ -220,8 +220,8 @@ class _GamePageState extends State<GamePage>
   }
 
   Duration get _roundDuration {
-    final int milliseconds = 1550 - (_score * 26) - (_streak * 9);
-    return Duration(milliseconds: milliseconds.clamp(520, 1550));
+    final int milliseconds = 2100 - (_score * 18) - (_streak * 5);
+    return Duration(milliseconds: milliseconds.clamp(850, 2100));
   }
 
   void _rollBoard() {
